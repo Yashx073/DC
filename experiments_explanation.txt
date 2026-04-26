@@ -1,0 +1,154 @@
+Distributed Computing Experiments - Explanation
+
+EXP 1: Inter-Process Communication (Sockets)
+File: exp1_socket_ipc.py
+
+Purpose:
+Demonstrates basic client-server IPC using TCP sockets on localhost.
+
+How it works:
+1. The server thread creates a TCP socket and binds to 127.0.0.1:43290.
+2. It listens for one incoming client connection.
+3. The client thread waits 1 second so the server can start.
+4. The client connects to the server and sends a text message.
+5. The server receives the message and sends a reply.
+6. Both sides close their sockets.
+
+Key points:
+- Uses threads so server and client can run in one script.
+- Server enables SO_REUSEADDR to avoid bind issues during quick restarts.
+
+
+EXP 2: Client/Server RPC (Remote Procedure Call)
+File: exp2_rpc.py
+
+Purpose:
+Shows how a client can call server-side functions as if they were local.
+
+How it works:
+1. The RPC server defines two methods: add(a, b) and multiply(a, b).
+2. Client sends a request tuple: (function_name, args).
+3. Request is serialized with pickle and sent over TCP.
+4. Server deserializes, resolves method with getattr, executes it, and returns the result.
+5. Client receives and prints returned values.
+
+Key points:
+- Illustrates RPC idea using sockets + serialization.
+- Current example performs two remote calls: add(10, 20) and multiply(5, 6).
+
+
+EXP 3: Group Communication using Multicast
+Files: exp3_receiver.py, exp3_sender.py
+
+Purpose:
+Demonstrates one-to-many communication where one sender broadcasts to a multicast group.
+
+Receiver flow (exp3_receiver.py):
+1. Creates a UDP socket.
+2. Enables SO_REUSEADDR and binds to port 5007.
+3. Joins multicast group 224.1.1.1.
+4. Continuously receives and prints incoming messages.
+
+Sender flow (exp3_sender.py):
+1. Creates a UDP socket.
+2. Sets multicast TTL to 1 (local network scope).
+3. Sends one message to 224.1.1.1:5007.
+
+Key points:
+- Multiple receivers can listen to the same multicast group.
+- Receiver should be started before sender for visible output.
+
+
+EXP 5: Election Algorithms (Bully and Ring)
+File: exp5_election_algorithms.py
+
+Purpose:
+Simulates coordinator election in distributed systems after failures.
+
+Part A: Bully Election Algorithm
+1. Highest process ID starts as coordinator.
+2. If coordinator crashes, another process starts election.
+3. It notifies higher-ID alive processes.
+4. Highest alive process eventually becomes new coordinator.
+
+Part B: Ring Election Algorithm
+1. Processes are arranged logically in a ring.
+2. Starter process initiates election message around ring.
+3. Active processes are considered.
+4. Highest active ID is elected coordinator.
+
+Key points:
+- Bully relies on process priority (ID).
+- Ring relies on ring-based circulation and active membership.
+
+
+EXP 6 (Token-Based): Mutual Exclusion with Token Passing
+File: exp6_token.py
+
+Purpose:
+Shows token-based critical section control (only token holder can enter CS).
+
+How it works:
+1. Process 0 initially has token.
+2. Random process requests critical section (CS).
+3. If requester is seen while token holder has token, token is passed.
+4. Requesting process enters CS, exits, and system continues.
+
+Key points:
+- At most one token exists, so CS mutual exclusion is naturally enforced.
+- Script runs simulation for 20 seconds with random requests.
+
+
+EXP 6 (Non-Token): Ricart-Agrawala Mutual Exclusion
+File: exp6_non_token.py
+
+Purpose:
+Implements permission-based distributed mutual exclusion without a token.
+
+How it works:
+1. Process requests CS with a timestamp.
+2. It sends request to all other processes.
+3. Receiver grants reply immediately if:
+   - it is not requesting, or
+   - requester timestamp is earlier, or
+   - timestamps are equal and requester PID is smaller.
+4. Otherwise, reply is deferred.
+5. Requester enters CS after receiving all replies.
+6. On exit, deferred replies are sent.
+
+Key points:
+- Ensures one process enters CS at a time through total ordering by (timestamp, PID).
+- This implementation simulates multiple processes inside one program.
+
+
+EXP 8: Task Assignment Problem
+File: exp8_task_assignment.c
+
+Purpose:
+Assigns each task to the processor with the minimum cost using a cost matrix.
+
+How it works:
+1. Reads number of tasks and processors.
+2. Reads task-processor cost matrix.
+3. For each task, scans all processors.
+4. Selects processor with the smallest cost for that task.
+5. Prints assignment results.
+
+Key points:
+- Uses a greedy row-wise minimum selection.
+- Simple and fast, but it does not enforce global one-task-per-processor constraints.
+
+
+Quick Run Notes:
+- Python scripts:
+  python exp1_socket_ipc.py
+  python exp2_rpc.py
+  python exp3_receiver.py   (first terminal)
+  python exp3_sender.py     (second terminal)
+  python exp5_election_algorithms.py
+  python exp6_token.py
+  python exp6_non_token.py
+
+- C program:
+  gcc exp8_task_assignment.c -o exp8
+  ./exp8

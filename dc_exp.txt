@@ -1,0 +1,508 @@
+========================== EXP 1 ==========================
+'''
+EXP1: Implement Inter-Process Communication (IPC) using Sockets 
+This code demonstrates a simple client-server communication using Python's socket programming. 
+The server listens for incoming connections and responds to the client's message, 
+while the client sends a message to the server and waits for a response. 
+Both the server and client run in separate threads to allow simultaneous execution.
+'''
+
+import socket
+import threading
+import time
+
+# ---------- SERVER FUNCTION ----------
+def server_program():
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    host = "127.0.0.1"
+    port = 5000
+
+    server_socket.bind((host, port))
+    server_socket.listen(1)
+    print("Server: Waiting for connection...")
+
+    conn, addr = server_socket.accept()
+    print("Server: Connected to", addr)
+
+    message = conn.recv(1024).decode()
+    print("Server: Received ->", message)
+
+    response = "Hello Client, your message is received!"
+    conn.send(response.encode())
+
+    conn.close()
+    server_socket.close()
+
+# ---------- CLIENT FUNCTION ----------
+def client_program():
+    time.sleep(1)  # Ensures server starts first
+    
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    host = "127.0.0.1"
+    port = 5000
+
+    client_socket.connect((host, port))
+
+    message = "Hello Server, this is Client!"
+    client_socket.send(message.encode())
+
+    response = client_socket.recv(1024).decode()
+    print("Client: Received ->", response)
+
+    client_socket.close()
+
+# ---------- MAIN ----------
+server_thread = threading.Thread(target=server_program)
+client_thread = threading.Thread(target=client_program)
+
+server_thread.start()
+client_thread.start()
+
+server_thread.join()
+client_thread.join()
+
+========================== EXP 2 ==========================
+'''
+EXP2: Implement Client/Server using Remote Procedure Call (RPC)
+This code demonstrates a simple RPC mechanism using Python's socket programming and the pickle module for serialization.
+The RPC server defines two methods, `add` and `multiply`, which can be called remotely by the client. 
+The client sends the function name and arguments to the server, 
+which executes the requested function and returns the result back to the client. 
+Both the server and client run in separate threads to allow simultaneous execution.
+'''
+
+
+import socket
+import threading
+import pickle
+import time
+
+# ---------------- RPC SERVER ----------------
+class RPCServer:
+    def add(self, a, b):
+        return a + b
+
+    def multiply(self, a, b):
+        return a * b
+
+def server_program():
+    server = RPCServer()
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 6000))
+    s.listen(1)
+
+    print("RPC Server: Waiting for client...")
+
+    conn, addr = s.accept()
+    print("RPC Server: Client connected from", addr)
+
+    while True:
+        data = conn.recv(1024)
+        if not data:
+            break
+
+        function_name, args = pickle.loads(data)
+
+        print(f"RPC Server: Request -> {function_name}{args}")
+
+        # Call actual method
+        result = getattr(server, function_name)(*args)
+
+        conn.send(pickle.dumps(result))
+
+    conn.close()
+    s.close()
+
+# ---------------- RPC CLIENT ----------------
+def client_program():
+    time.sleep(1)  # wait for server
+
+    c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    c.connect(("127.0.0.1", 6000))
+
+    # Remote call 1
+    request = ("add", (10, 20))
+    c.send(pickle.dumps(request))
+    result = pickle.loads(c.recv(1024))
+    print("RPC Client: add(10,20) =", result)
+
+    # Remote call 2
+    request = ("multiply", (5, 6))
+    c.send(pickle.dumps(request))
+    result = pickle.loads(c.recv(1024))
+    print("RPC Client: multiply(5,6) =", result)
+
+    c.close()
+
+# ---------------- MAIN ----------------
+server_thread = threading.Thread(target=server_program)
+client_thread = threading.Thread(target=client_program)
+
+server_thread.start()
+client_thread.start()
+
+server_thread.join()
+client_thread.join()
+
+========================== EXP 3 [RUN FUCKING TOGETHER] ==========================
+
+---------------------        THIS IS RECEIVER.PY         -------------------------
+import socket
+import struct
+
+MCAST_GRP = '224.1.1.1'
+MCAST_PORT = 5007
+
+# Create UDP socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+
+# Allow multiple receivers on same machine
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+# Bind to port
+sock.bind(('', MCAST_PORT))
+
+# Join multicast group
+mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
+sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
+print("Receiver started... Waiting for messages")
+
+while True:
+    data, addr = sock.recvfrom(1024)
+    print("Received message:", data.decode())
+
+---------------------        THIS IS SENDER.PY         -------------------------
+
+'''
+EXP3: Implement Group Communication using Multicast
+This code demonstrates a simple group communication mechanism using Python's socket programming and multicast.
+'''
+
+import socket
+import struct
+
+# Multicast group details
+MCAST_GRP = '224.1.1.1'
+MCAST_PORT = 5007
+
+# Create UDP socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+
+# Set Time-to-live (TTL) so message stays inside local network
+sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+
+message = "Hello Group! This is Group Communication."
+
+# Send message to multicast group
+sock.sendto(message.encode(), (MCAST_GRP, MCAST_PORT))
+
+print("Message sent to group")
+
+
+========================== EXP 5 [BOTH RING AND BULLY] ==========================
+'''
+EXP5: Implement Election Algorithms ( bully, ring )
+This code demonstrates the implementation of two popular election algorithms: the Bully Election Algorithm and the Ring Election Algorithm.
+
+In the Bully Election Algorithm, processes with higher IDs can "bully" lower ID processes to become the coordinator. 
+If the coordinator crashes, an election is triggered to select a new coordinator.
+
+In the Ring Election Algorithm, processes are arranged in a logical ring. 
+When an election is initiated, the process sends a message to the next process in the ring. 
+The process with the highest ID that is still alive becomes the coordinator.
+'''
+
+# Bully Election Algorithm
+
+class BullyElection:
+    def __init__(self, processes):
+        self.processes = processes  # list of process IDs
+        self.alive = {p: True for p in processes}
+        self.coordinator = max(processes)
+
+
+    def crash(self, pid):
+        self.alive[pid] = False
+        print(f"Process {pid} crashed.")
+
+
+    def start_election(self, pid):
+        print(f"\nProcess {pid} starts election")
+
+
+        higher = [p for p in self.processes if p > pid and self.alive[p]]
+
+
+        if not higher:
+            self.coordinator = pid
+            print(f"Process {pid} becomes new Coordinator")
+        else:
+            print(f"Process {pid} sends Election to {higher}")
+            new_leader = max(higher)
+            self.start_election(new_leader)
+
+
+    def show_coordinator(self):
+        print("Current Coordinator:", self.coordinator)
+
+
+processes = [1, 2, 3, 4, 5]
+bully = BullyElection(processes)
+
+print("Bully Election Algorithm Simulation")
+bully.show_coordinator()
+
+
+bully.crash(5)        # coordinator crashes
+bully.start_election(2)
+
+
+bully.show_coordinator()
+
+#-----------------------------------------------------------------------------------
+
+# Ring Election Algorithm
+
+class RingElection:
+    def __init__(self, processes):
+        self.processes = processes
+        self.alive = {p: True for p in processes}
+        self.coordinator = max(processes)
+
+
+    def crash(self, pid):
+        self.alive[pid] = False
+        print(f"Process {pid} crashed.")
+
+
+    def start_election(self, starter):
+        print(f"\nProcess {starter} starts election")
+
+
+        active_list = []
+        n = len(self.processes)
+        index = self.processes.index(starter)
+
+
+        for i in range(n):
+            pid = self.processes[(index + i) % n]
+            if self.alive[pid]:
+                active_list.append(pid)
+
+
+        print("Active Processes:", active_list)
+
+
+        new_leader = max(active_list)
+        self.coordinator = new_leader
+
+
+        print(f"Process {new_leader} elected as Coordinator")
+
+
+    def show_coordinator(self):
+        print("Current Coordinator:", self.coordinator)
+
+# Example
+processes = [1, 2, 3, 4]
+ring = RingElection(processes)
+
+print("-----------------------------------------------")
+print("\nRing Election Algorithm Simulation")
+ring.show_coordinator()
+
+
+ring.crash(4)
+ring.start_election(2)
+
+
+ring.show_coordinator()
+
+
+========================== EXP 6 [TOKEN] ==========================
+
+import threading 
+import time 
+import random 
+
+class Process: 
+    def __init__ (self, pid, total_processes): 
+        self.pid = pid 
+        self.total = total_processes 
+        self.has_token = False   
+        self.request = False 
+    def request_cs(self): 
+        print(f"Process {self.pid} requesting Critical Section") 
+        self.request = True 
+    def enter_cs(self): 
+        print(f"Process {self.pid} ENTERED Critical Section") 
+        time.sleep(2) 
+        print(f"Process {self.pid} EXITING Critical Section") 
+        self.request = False 
+        
+def singhal_algorithm(processes): 
+    token_holder = 0 
+    processes[token_holder].has_token = True 
+    while True: 
+        for p in processes: 
+            if p.request and processes[token_holder].has_token: 
+                processes[token_holder].has_token = False 
+                p.has_token = True 
+                token_holder = p.pid 
+                p.enter_cs() 
+                time.sleep(1) 
+        time.sleep(1) 
+# Main 
+n = 3 
+processes = [Process(i, n) for i in range(n)] 
+# Random request generator 
+def generate_requests(): 
+    while True: 
+        time.sleep(random.randint(3, 6)) 
+        p = random.choice(processes) 
+        p.request_cs() 
+        
+threading.Thread(target=singhal_algorithm, args=(processes,), daemon=True).start() 
+threading.Thread(target=generate_requests, daemon=True).start() 
+time.sleep(20)
+
+========================== EXP 6 [NON TOKEN] ==========================
+
+'''
+EXP6: Ricart-Agrawala Algorithm for Mutual Exclusion
+This code implements the Ricart-Agrawala algorithm for mutual exclusion in a distributed system.
+Usage: Run three instances of this script in separate terminals with different PIDs (0, 1, 2).
+Example:    Terminal 1: python exp6_process.py 0
+            Terminal 2: python exp6_process.py 1   
+            Terminal 3: python exp6_process.py 2
+The processes will request access to a critical section, 
+and the algorithm ensures that only one process can enter the critical section at a time, 
+while others wait for their turn.
+'''
+
+import threading
+import time
+import random
+
+class RA_Process:
+    def __init__(self, pid, total):
+        self.pid = pid
+        self.total = total
+        self.timestamp = 0
+        self.reply_count = 0
+        self.requesting = False
+        self.deferred = []
+
+    def request_cs(self):
+        self.requesting = True
+        self.timestamp = time.time()
+        self.reply_count = 0
+        print(f"Process {self.pid} requesting CS at time {self.timestamp}")
+
+        for p in processes:
+            if p.pid != self.pid:
+                p.receive_request(self.pid, self.timestamp)
+
+    def receive_request(self, pid, timestamp):
+        # Ricart-Agrawala Condition:
+        # Give reply if:
+        # 1. Not requesting CS
+        # 2. Or, own request has higher timestamp (incoming is lower)
+        # 3. Or, timestamps are equal but incoming pid is smaller
+        if (not self.requesting) or (timestamp < self.timestamp) or \
+           (timestamp == self.timestamp and pid < self.pid):
+            processes[pid].receive_reply()
+        else:
+            self.deferred.append(pid)
+
+    def receive_reply(self):
+        self.reply_count += 1
+        if self.reply_count == self.total - 1:
+            self.enter_cs()
+
+    def enter_cs(self):
+        print(f"Process {self.pid} ENTERED Critical Section")
+        time.sleep(2)
+        print(f"Process {self.pid} EXITING Critical Section")
+        self.requesting = False
+
+        # Send deferred replies
+        for pid in self.deferred:
+            processes[pid].receive_reply()
+        self.deferred = []
+
+# Main
+if __name__ == "__main__":
+    n = 3
+    processes = [RA_Process(i, n) for i in range(n)]
+
+    def generate_requests():
+        while True:
+            time.sleep(random.randint(3, 6))
+            p = random.choice(processes)
+            if not p.requesting:  # Avoid nested requests for the same process
+                p.request_cs()
+
+    threading.Thread(target=generate_requests, daemon=True).start()
+    
+    print(f"Simulation running for 20 seconds with {n} processes...")
+    time.sleep(20)
+    print("Simulation finished.")
+
+========================== EXP 8 ==========================
+
+/*
+EXP8: Task Assignment Problem
+This code implements a simple task assignment problem,
+where a set of tasks are assigned to a set of processors based on a cost matrix. 
+The program takes the number of tasks, number of processors, and the cost matrix as input, 
+and then assigns each task to the processor with the minimum cost. 
+*/
+
+#include<stdio.h>
+
+int main()
+{
+    int tasks, processors;
+    int cost[10][10];
+    int i,j;
+    
+    printf("Enter number of tasks: ");
+    scanf("%d",&tasks);
+    
+    printf("Enter number of processors: ");
+    scanf("%d",&processors);
+    
+    printf("Enter cost matrix:\n");
+    
+    for(i=0;i<tasks;i++)
+    {
+        for(j=0;j<processors;j++)
+        {
+            scanf("%d",&cost[i][j]);
+        }
+    }
+    
+    printf("\nTask Assignment:\n");
+    
+    for(i=0;i<tasks;i++)
+    {
+        int min = cost[i][0];
+        int processor = 0;
+        
+        for(j=1;j<processors;j++)
+        {
+            if(cost[i][j] < min)
+            {
+                min = cost[i][j];
+                processor = j;
+            }
+        }
+        
+        printf("Task %d assigned to Processor %d with cost %d\n", i+1, processor+1, min);
+    }
+    
+    return 0;
+}
